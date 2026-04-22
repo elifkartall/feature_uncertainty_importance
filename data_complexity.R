@@ -1,5 +1,5 @@
 ###############################################
-# 0. LIBRARIES
+# 0. KÜTÜPHANELER
 ###############################################
 
 if (!require("pacman")) install.packages("pacman")
@@ -9,33 +9,28 @@ pacman::p_load(
   data.table,
   dplyr,
   RSpectra,
-  ggplot2,
   tidyr,
-  forcats,
-  dendextend,
-  RColorBrewer,
-  scales
+  flextable,
+  officer
 )
 
 ###############################################
-# 1. IDS
+# 1. VERİ SETİ ID'LERİ
 ###############################################
 
 stable_ids <- c(44956, 44957, 44958, 44959, 44963,
                 44964, 45012, 44971, 44977)
 
 ###############################################
-# 2. COMPLEXITY FUNCTION
+# 2. GÜVENLİ KARMAŞIKLIK FONKSİYONU
 ###############################################
 
 compute_complexity_safe <- function(id) {
-  
-  cat("Processing:", id, "\n")
-  
   tryCatch({
     
     ds <- getOMLDataSet(data.id = id)
     ds_name <- ds$desc$name
+    
     data <- as.data.frame(ds$data)
     
     target <- ds$target.features
@@ -47,187 +42,167 @@ compute_complexity_safe <- function(id) {
     
     n <- nrow(data)
     p <- ncol(X_num)
-    
     n_p_ratio <- n / (p + 1)
+    
     missing_ratio <- mean(is.na(data))
-    target_var <- var(y, na.rm = TRUE)
     
-    if (p > 20) {
-      cols <- sample(p, 20)
-      X_small <- X_num[, cols, drop = FALSE]
+    target_var <- if (is.numeric(y)) var(y, na.rm = TRUE) else NA
+    
+    # Tekrarlılık
+    feature_redundancy <- if (ncol(X_num) > 1) {
+      
+      if (ncol(X_num) > 20) {
+        X_small <- X_num[, sample(ncol(X_num), 20), drop = FALSE]
+      } else {
+        X_small <- X_num
+      }
+      
+      cor_mat <- suppressWarnings(
+        cor(X_small, use = "pairwise.complete.obs")
+      )
+      
+      mean(abs(cor_mat[upper.tri(cor_mat)]), na.rm = TRUE)
+      
     } else {
-      X_small <- X_num
+      NA
     }
     
-    if (ncol(X_small) > 1) {
-      cor_mat <- cor(X_small, use = "pairwise.complete.obs")
-      feature_redundancy <- mean(abs(cor_mat[upper.tri(cor_mat)]), na.rm = TRUE)
-    } else {
-      feature_redundancy <- NA
-    }
-    
+    # İçsel Boyut
     intrinsic_dim <- 1
     
     if (ncol(X_num) > 2) {
+      
       X_scaled <- scale(X_num)
+      X_scaled[is.na(X_scaled)] <- 0
+      
       k <- min(10, ncol(X_scaled) - 1)
       s <- RSpectra::svds(X_scaled, k = k)
+      
       var_explained <- cumsum(s$d^2) / sum(s$d^2)
       intrinsic_dim <- which(var_explained >= 0.95)[1]
+      
       if (is.na(intrinsic_dim)) intrinsic_dim <- k
     }
     
-    if (n > 200) {
-      idx <- sample(n, 200)
-      local_var <- var(y[idx], na.rm = TRUE)
+    # Yerel Varyans
+    local_var <- if (is.numeric(y)) {
+      if (n > 200) var(sample(y, 200), na.rm = TRUE)
+      else var(y, na.rm = TRUE)
     } else {
-      local_var <- var(y, na.rm = TRUE)
+      NA
     }
     
     data.frame(
-      dataset_name = ds_name,
-      dataset_id = id,
-      n = n,
-      p = p,
-      n_p_ratio = n_p_ratio,
-      missing_ratio = missing_ratio,
-      target_variance = target_var,
-      feature_redundancy = feature_redundancy,
-      intrinsic_dim_95 = intrinsic_dim,
-      local_target_variance = local_var
+      "Veri Seti" = ds_name,
+      "Örnek Sayısı" = n,
+      "Özellik Sayısı" = p,
+      "Örnek / Özellik Oranı" = n_p_ratio,
+      "Eksik Veri Oranı" = missing_ratio,
+      "Hedef Varyansı" = target_var,
+      "Tekrarlılık" = feature_redundancy,
+      "İçsel Boyut" = intrinsic_dim,
+      "Yerel Varyans" = local_var,
+      check.names = FALSE
     )
     
   }, error = function(e) {
     
     data.frame(
-      dataset_name = paste0("ID_", id),
-      dataset_id = id,
-      n = NA, p = NA, n_p_ratio = NA,
-      missing_ratio = NA,
-      target_variance = NA,
-      feature_redundancy = NA,
-      intrinsic_dim_95 = NA,
-      local_target_variance = NA
+      "Veri Seti" = paste0("ID ", id),
+      "Örnek Sayısı" = NA,
+      "Özellik Sayısı" = NA,
+      "Örnek / Özellik Oranı" = NA,
+      "Eksik Veri Oranı" = NA,
+      "Hedef Varyansı" = NA,
+      "Tekrarlılık" = NA,
+      "İçsel Boyut" = NA,
+      "Yerel Varyans" = NA,
+      check.names = FALSE
     )
   })
 }
 
 ###############################################
-# 3. RUN PIPELINE
+# 3. ANALİZİ ÇALIŞTIR
 ###############################################
 
 results <- lapply(stable_ids, compute_complexity_safe)
 final_df <- bind_rows(results)
 
 ###############################################
-# 4. PREPARE MATRIX
+# 4. LOG DÖNÜŞÜMÜ
 ###############################################
 
-df_mat <- final_df
-
-rownames(df_mat) <- make.unique(df_mat$dataset_name)
-df_mat$dataset_name <- NULL
-df_mat$dataset_id   <- NULL
-
-colnames(df_mat) <- c(
-  "Sample Size",
-  "Features",
-  "n/p Ratio",
-  "Missing Rate",
-  "Target Variance",
-  "Feature Redundancy",
-  "Intrinsic Dim.",
-  "Local Variance"
-)
-
-df_mat <- df_mat[, apply(df_mat, 2, function(x) sd(x, na.rm = TRUE) > 0)]
-
-###############################################
-# 5. Z-SCORE NORMALIZATION
-###############################################
-
-df_scaled <- scale(df_mat)
-
-df_scaled[is.na(df_scaled)] <- 0
-df_scaled[is.infinite(df_scaled)] <- 0
-
-
-
-
-row_clust <- hclust(dist(df_scaled), method = "ward.D2")
-col_clust <- hclust(dist(t(df_scaled)), method = "ward.D2")
-
-df_scaled <- df_scaled[row_clust$order, col_clust$order]
-
-
-
-plot_df <- as.data.frame(df_scaled)
-plot_df$Dataset <- rownames(plot_df)
-
-plot_long <- pivot_longer(
-  plot_df,
-  cols = -Dataset,
-  names_to = "Metric",
-  values_to = "Zscore"
-)
-
-plot_long$Dataset <- factor(
-  plot_long$Dataset,
-  levels = rev(unique(plot_long$Dataset))
-)
-
-plot_long$Metric <- factor(
-  plot_long$Metric,
-  levels = unique(plot_long$Metric)
-)
-
-
-
-ggplot(plot_long, aes(Metric, Dataset, fill = Zscore)) +
-  
-  geom_tile(color = "white", linewidth = 0.6) +
-  
-  geom_text(
-    aes(label = round(Zscore, 2)),
-    size = 3.2,
-    family = "serif",
-    color = "black"
-  ) +
-  
-  scale_fill_gradient2(
-    low = "#2C3E50",
-    mid = "#F7F7F7",
-    high = "#7F0000",
-    midpoint = 0,
-    limits = c(-3, 3),
-    oob = scales::squish,
-    name = "Z-score"
-  ) +
-  
-  labs(
-    title = "",
-    subtitle = "",
-    x = NULL,
-    y = NULL,
-    caption = ""
-  ) +
-  
-  theme_minimal(base_family = "serif", base_size = 13) +
-  
-  theme(
-    plot.title = element_text(
-      face = "bold",
-      size = 18,
-      hjust = 0.5,
-      margin = ggplot2::margin(b = 8)
-    ),
-    
-    plot.subtitle = element_text(
-      size = 12,
-      hjust = 0.5,
-      color = "grey30",
-      margin = ggplot2::margin(b = 14)
-    ),
-    
-    plot.margin = ggplot2::margin(15, 20, 15, 15)
+final_df <- final_df %>%
+  mutate(
+    `Örnek Sayısı` = log1p(`Örnek Sayısı`),
+    `Özellik Sayısı` = log1p(`Özellik Sayısı`),
+    `Hedef Varyansı` = log1p(`Hedef Varyansı`),
+    `Yerel Varyans` = log1p(`Yerel Varyans`)
   )
+
+###############################################
+# 5. MIN-MAX NORMALİZASYONU
+###############################################
+
+normalize_minmax <- function(x) {
+  
+  if (all(is.na(x))) return(x)
+  
+  rng <- range(x, na.rm = TRUE)
+  
+  if (rng[1] == rng[2]) return(rep(0, length(x)))
+  
+  (x - rng[1]) / (rng[2] - rng[1])
+}
+
+norm_df <- final_df %>%
+  mutate(
+    across(
+      .cols = where(is.numeric),
+      .fns  = normalize_minmax
+    )
+  )
+
+###############################################
+# 6. TABLO
+###############################################
+
+complexity_table <- flextable(norm_df) %>%
+  
+  colformat_double(digits = 3) %>%
+  
+  border_remove() %>%
+  
+  hline_top(
+    part = "header",
+    border = fp_border(width = 2)
+  ) %>%
+  
+  hline_bottom(
+    part = "header",
+    border = fp_border(width = 1)
+  ) %>%
+  
+  hline_bottom(
+    part = "body",
+    border = fp_border(width = 2)
+  ) %>%
+  
+  autofit() %>%
+  
+  font(fontname = "Times New Roman", part = "all") %>%
+  
+  fontsize(size = 10, part = "all") %>%
+  
+  bold(part = "header") %>%
+  
+  align(align = "center", part = "all") %>%
+  
+  valign(valign = "center", part = "all") %>%
+  
+  add_footer_lines(" ")
+
+
+
+print(complexity_table)
