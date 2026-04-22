@@ -1,124 +1,112 @@
-###############################################
-# 0. LIBRARIES 
-###############################################
-
-if (!require("pacman")) install.packages("pacman")
-
-pacman::p_load(
-  OpenML,
-  data.table,
-  dplyr,
-  RSpectra,
-  tidyr,
-  flextable,
-  officer
-)
+pacman::p_load(tidyr, dplyr, flextable, officer)
 
 ###############################################
-# 1. IDS
+# 1. VERİYİ GENİŞ FORMATA ÇEVİR
 ###############################################
 
-stable_ids <- c(44956, 44957, 44958, 44959, 44963,
-                44964, 45012, 44971, 44977)
-
-compute_complexity_safe <- function(id) {
-  tryCatch({
-    ds <- getOMLDataSet(data.id = id)
-    ds_name <- ds$desc$name
-    data <- as.data.frame(ds$data)
-    target <- ds$target.features
-    if (is.null(target)) target <- names(data)[ncol(data)]
-    y <- data[[target]]
-    X <- data[, setdiff(names(data), target), drop = FALSE]
-    X_num <- X[, sapply(X, is.numeric), drop = FALSE]
-    
-    n <- nrow(data)
-    p <- ncol(X_num)
-    n_p_ratio <- n / (p + 1)
-    missing_ratio <- mean(is.na(data))
-    target_var <- var(y, na.rm = TRUE)
-    
-    if (p > 20) {
-      X_small <- X_num[, sample(p, 20), drop = FALSE]
-    } else {
-      X_small <- X_num
-    }
-    
-    feature_redundancy <- if(ncol(X_small) > 1) {
-      cor_mat <- cor(X_small, use = "pairwise.complete.obs")
-      mean(abs(cor_mat[upper.tri(cor_mat)]), na.rm = TRUE)
-    } else { NA }
-    
-    intrinsic_dim <- 1
-    if (ncol(X_num) > 2) {
-      X_scaled <- scale(X_num)
-      k <- min(10, ncol(X_scaled) - 1)
-      s <- RSpectra::svds(X_scaled, k = k)
-      var_explained <- cumsum(s$d^2) / sum(s$d^2)
-      intrinsic_dim <- which(var_explained >= 0.95)[1]
-      if (is.na(intrinsic_dim)) intrinsic_dim <- k
-    }
-    
-    local_var <- if(n > 200) var(y[sample(n, 200)], na.rm = TRUE) else var(y, na.rm = TRUE)
-    
-    data.frame(
-      Dataset = ds_name,
-      n = n,
-      p = p,
-      n_p_ratio = n_p_ratio,
-      missing_ratio = missing_ratio,
-      target_var = target_var,
-      redundancy = feature_redundancy,
-      int_dim = intrinsic_dim,
-      local_var = local_var
-    )
-  }, error = function(e) data.frame(Dataset = paste0("ID_", id), n=NA, p=NA, n_p_ratio=NA, 
-                                    missing_ratio=NA, target_var=NA, redundancy=NA, 
-                                    int_dim=NA, local_var=NA))
-}
-
-###############################################
-# 3. RUN PIPELINE & 4. PREPARE DATA
-###############################################
-
-results <- lapply(stable_ids, compute_complexity_safe)
-final_df <- bind_rows(results)
-
-
-apa_df <- final_df %>%
-  rename(
-    `Sample Size (n)` = n,
-    `Features (p)` = p,
-    `n/p Ratio` = n_p_ratio,
-    `Missing Rate` = missing_ratio,
-    `Target Var.` = target_var,
-    `Redundancy` = redundancy,
-    `Int. Dim.` = int_dim,
-    `Local Var.` = local_var
+perf_wide <- perf_df %>%
+  pivot_wider(
+    names_from = Model,
+    values_from = c(Coverage, Avg_Width),
+    names_glue = "{.value}_{Model}"
   )
 
 ###############################################
-# 5. CREATE TABLE 
+# 2. NORMALİZASYON FONKSİYONU
 ###############################################
 
-apa_table <- flextable(apa_df) %>%
-  # Ondalık sayıları düzenle (Örn: Virgülden sonra 2 basamak)
-  colformat_double(digits = 2) %>%
-  colformat_int(j = c("Sample Size (n)", "Features (p)", "Int. Dim.")) %>%
+normalize_minmax <- function(x) {
+  rng <- range(x, na.rm = TRUE)
   
-  # APA Teması uygula (Sadece üst, alt ve başlık altı çizgileri)
-  theme_apa() %>%
+  if (rng[1] == rng[2]) {
+    return(rep(0, length(x)))
+  }
   
-  # Genişliği otomatik ayarla
+  (x - rng[1]) / (rng[2] - rng[1])
+}
+
+###############################################
+# 3. WIDTH DEĞERLERİNİ DÖNÜŞTÜR
+###############################################
+# Sadece Avg_Width sütunlarına uygulanır
+# Önce log1p(): büyük değerleri sıkıştırır
+# Sonra Min-Max: 0-1 aralığına getirir
+
+perf_wide <- perf_wide %>%
+  mutate(
+    across(
+      starts_with("Avg_Width"),
+      ~ log1p(.)
+    )
+  ) %>%
+  mutate(
+    across(
+      starts_with("Avg_Width"),
+      normalize_minmax
+    )
+  )
+
+###############################################
+# 4. GENEL ORTALAMA SATIRI
+###############################################
+
+summary_wide <- perf_wide %>%
+  summarise(
+    Dataset = "Ortalama",
+    across(where(is.numeric), ~ mean(., na.rm = TRUE))
+  )
+
+final_df <- bind_rows(perf_wide, summary_wide)
+
+###############################################
+# 5. TABLO OLUŞTUR
+###############################################
+
+summary_table <- flextable(final_df) %>%
+  
+  set_header_labels(
+    Dataset = "Veriseti",
+    Coverage_LM = "LM",
+    Coverage_RF = "RF",
+    Coverage_XGBOOST = "XGBOOST",
+    Avg_Width_LM = "LM",
+    Avg_Width_RF = "RF",
+    Avg_Width_XGBOOST = "XGBOOST"
+  ) %>%
+  
+  add_header_row(
+    values = c("", "Kapsama (Coverage)", "Ortalama Genişlik (Width)"),
+    colwidths = c(1, 3, 3)
+  ) %>%
+  
+  border_remove() %>%
+  
+  hline_top(
+    part = "header",
+    border = fp_border(width = 2)
+  ) %>%
+  
+  hline_bottom(
+    part = "header",
+    border = fp_border(width = 1)
+  ) %>%
+  
+  hline_bottom(
+    part = "body",
+    border = fp_border(width = 2)
+  ) %>%
+  
+  colformat_double(digits = 3) %>%
+  
+  bold(i = nrow(final_df)) %>%
+  bold(part = "header") %>%
+  
+  align(align = "center", part = "all") %>%
+  align(j = 1, align = "left", part = "all") %>%
+  
   autofit() %>%
   
-
-  font(fontname = "Times New Roman", part = "all") %>%
-  fontsize(size = 10, part = "all") %>%
-  
-
-  add_footer_lines("")
+  set_caption("")
 
 
-print(apa_table)
-
+summary_table
