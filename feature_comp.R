@@ -1,5 +1,5 @@
 ###############################################
-# 1. KURULUM VE GEREKLİ KÜTÜPHANELER
+# 1. GEREKLİ KÜTÜPHANELER
 ###############################################
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(
@@ -123,7 +123,7 @@ for(id in stable_ids) {
 }
 
 ###############################################
-# 4. ANALİZ VE ISI HARİTASI VERİSİ
+# 4. VERİ HAZIRLIK
 ###############################################
 alignment_df <- data.frame()
 performance_list <- list()
@@ -163,7 +163,7 @@ for(id_key in names(results_storage)) {
 }
 
 ###############################################
-# 5. GÖRSELLEŞTİRME: ISI HARİTASI (ESKİ STİL)
+# 5. GÖRSELLEŞTİRME
 ###############################################
 
 plot_df <- alignment_df %>% 
@@ -240,10 +240,10 @@ apa_table <- flextable(final_df) %>%
   ) %>%
   
 
-  border_remove() %>% # Önce tüm çizgileri siliyoruz
-  hline_top(part = "header", border = fp_border(width = 2)) %>% # En üst çizgi
-  hline_bottom(part = "header", border = fp_border(width = 1)) %>% # Başlık altı çizgi
-  hline_bottom(part = "body", border = fp_border(width = 2)) %>% # En alt çizgi
+  border_remove() %>% 
+  hline_top(part = "header", border = fp_border(width = 2)) %>% 
+  hline_bottom(part = "header", border = fp_border(width = 1)) %>% 
+  hline_bottom(part = "body", border = fp_border(width = 2)) %>% 
 
   
   colformat_double(digits = 3) %>%
