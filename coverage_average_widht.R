@@ -15,7 +15,7 @@ pacman::p_load(
 )
 
 ###############################################
-# 1. IDS & 2. SAFE COMPLEXITY FUNCTION (Aynı kalıyor)
+# 1. IDS
 ###############################################
 
 stable_ids <- c(44956, 44957, 44958, 44959, 44963,
@@ -98,7 +98,7 @@ apa_df <- final_df %>%
   )
 
 ###############################################
-# 5. CREATE APA TABLE 
+# 5. CREATE TABLE 
 ###############################################
 
 apa_table <- flextable(apa_df) %>%
@@ -112,13 +112,13 @@ apa_table <- flextable(apa_df) %>%
   # Genişliği otomatik ayarla
   autofit() %>%
   
-  # Yazı tipini Times New Roman yap (Akademik standart)
+
   font(fontname = "Times New Roman", part = "all") %>%
   fontsize(size = 10, part = "all") %>%
   
-  # Tablo altı notu ekle
+
   add_footer_lines("")
 
-# Tabloyu görüntüle
+
 print(apa_table)
 
