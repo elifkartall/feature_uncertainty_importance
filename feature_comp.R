@@ -1,10 +1,10 @@
 ###############################################
-# 1. GEREKLİ KÜTÜPHANELER
+# 1. KURULUM VE GEREKLİ KÜTÜPHANELER
 ###############################################
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(
   DALEX, predictset, ggplot2, randomForest, xgboost, 
-  OpenML, dplyr, tidyr, scales, flextable, quantreg, quantregForest
+  OpenML, dplyr, tidyr, scales, flextable, quantreg, quantregForest, officer
 )
 
 xgb_predict_final <- function(model, newdata) {
@@ -22,7 +22,6 @@ xgb_predict_final <- function(model, newdata) {
 get_model_objects <- function(x_train, y_train, model_type = "lm") {
   x_mat <- as.matrix(x_train)
   
-  # Ana Tahmin Modeli
   base_model <- switch(model_type,
                        "lm" = lm(y ~ ., data = data.frame(y = y_train, x_train)),
                        "rf" = randomForest(x_train, y_train, ntree = 500),
@@ -30,7 +29,6 @@ get_model_objects <- function(x_train, y_train, model_type = "lm") {
                                            params = list(objective = "reg:squarederror"))
   )
   
-  # Belirsizlik Modelleri 
   m_lo <- make_model(
     train_fun = function(x, y) {
       if(model_type == "xgboost") xgboost(data = as.matrix(x), label = y, nrounds = 100, verbose = 0, params = list(objective = "reg:quantile", alpha = 0.05))
@@ -66,7 +64,7 @@ get_model_objects <- function(x_train, y_train, model_type = "lm") {
 # 3. ANA HESAPLAMA DÖNGÜSÜ
 ###############################################
 stable_ids <- c(44956, 44957, 44958, 44959, 44963,
-                44964, 44965, 45012, 44971, 44977)
+                44964, 45012, 44971, 44977)
 results_storage <- list()
 
 cat("Analiz Başlıyor...\n")
@@ -90,6 +88,10 @@ for(id in stable_ids) {
     for(m in c("lm", "rf", "xgboost")) {
       cat("  Model Çalışıyor:", m, "\n")
       objs <- get_model_objects(x_train, y_train, m)
+      
+      # R-Kare (Accuracy)
+      preds_main <- if(m == "xgboost") xgb_predict_final(objs$base, x_test) else predict(objs$base, x_test)
+      r2_val <- 1 - (sum((y_test - preds_main)^2) / sum((y_test - mean(y_test))^2))
       
       # Prediction PFI
       exp_pred <- explain(objs$base, data = if(m=="xgboost") as.matrix(x_test) else x_test, y = y_test, 
@@ -115,7 +117,8 @@ for(id in stable_ids) {
         pfi_pred = pfi_pred, 
         pfi_unc = pfi_unc,
         coverage = cov_val,
-        mean_width = width_val
+        mean_width = width_val,
+        accuracy_r2 = r2_val
       )
     }
     results_storage[[as.character(id)]] <- list(dataset_name = oml$desc$name, results = model_results)
@@ -123,7 +126,7 @@ for(id in stable_ids) {
 }
 
 ###############################################
-# 4. VERİ HAZIRLIK
+# 4. ANALİZ VE NORMALİZASYON SÜREÇLERİ
 ###############################################
 alignment_df <- data.frame()
 performance_list <- list()
@@ -133,7 +136,7 @@ for(id_key in names(results_storage)) {
   for(m_name in names(entry$results)) {
     res <- entry$results[[m_name]]
     
-    # Isı Haritası için Korelasyon ve Overlap Hesaplama
+    # Isı Haritası Verisi
     df_p <- res$pfi_pred %>% filter(!variable %in% c("_baseline_", "_full_model_")) %>%
       group_by(variable) %>% summarise(v_pred = mean(dropout_loss))
     df_u <- res$pfi_unc %>% filter(!variable %in% c("_baseline_", "_full_model_")) %>%
@@ -152,107 +155,96 @@ for(id_key in names(results_storage)) {
                                  merged %>% arrange(desc(v_unc)) %>% slice(1:min(5,nrow(merged))) %>% pull(variable))) / min(5,nrow(merged))
     ))
     
-    # Tablo için Metrikleri Toplama
+    # Performans Tablosu Verisi
     performance_list[[length(performance_list) + 1]] <- data.frame(
       Dataset = entry$dataset_name,
       Model = toupper(m_name),
+      R2_Accuracy = res$accuracy_r2,
       Coverage = res$coverage,
       Avg_Width = res$mean_width
     )
   }
 }
 
-###############################################
-# 5. GÖRSELLEŞTİRME
-###############################################
+# Geniş Formata Çevirme
+perf_wide <- do.call(rbind, performance_list) %>%
+  pivot_wider(
+    names_from = Model,
+    values_from = c(R2_Accuracy, Coverage, Avg_Width),
+    names_glue = "{.value}_{Model}"
+  )
 
+# Width Normalizasyon Fonksiyonu
+normalize_minmax <- function(x) {
+  rng <- range(x, na.rm = TRUE)
+  if (rng[1] == rng[2]) return(rep(0, length(x)))
+  (x - rng[1]) / (rng[2] - rng[1])
+}
+
+# Width Dönüşümü: Log + Min-Max
+perf_wide <- perf_wide %>%
+  mutate(across(starts_with("Avg_Width"), ~ log1p(.))) %>%
+  mutate(across(starts_with("Avg_Width"), normalize_minmax))
+
+# Genel Ortalama Satırı
+summary_wide <- perf_wide %>%
+  summarise(Dataset = "GENEL ORTALAMA", across(where(is.numeric), ~ mean(., na.rm = TRUE)))
+
+final_table_df <- bind_rows(perf_wide, summary_wide)
+
+###############################################
+# 5. GÖRSELLEŞTİRME: ISI HARİTASI 
+###############################################
 plot_df <- alignment_df %>% 
-  pivot_longer(cols = 3:5, names_to = "Metric", values_to = "Value") %>%
+  pivot_longer(cols = c("Spearman", "Kendall", "Overlap"), names_to = "Metric", values_to = "Value") %>%
   mutate(Metric = case_when(
     Metric == "Overlap" ~ "İlk 5 Örtüşme", 
     Metric == "Spearman" ~ "Spearman",
     Metric == "Kendall" ~ "Kendall",
     TRUE ~ Metric
   )) %>%
-  # ggplot y eksenini aşağıdan yukarıya dizdiği için sıralama: Kendall -> Spearman -> Örtüşme
   mutate(Metric = factor(Metric, levels = c("Kendall", "Spearman", "İlk 5 Örtüşme")))
 
 heatmap_plot <- ggplot(plot_df, aes(x = Model, y = Metric, fill = Value)) +
   geom_tile(color = "white", linewidth = 0.5) +
   geom_text(aes(label = sprintf("%.2f", Value)), fontface = "bold", size = 3.5) +
-  
   facet_wrap(~Dataset, ncol = 3) +
-  
-  scale_fill_gradient2(
-    low = "#2C3E50", 
-    mid = "#F7F7F7", 
-    high = "#7F0000", 
-    midpoint = 0, 
-    limits = c(-1, 1), 
-    name = " Z Skor"
-  ) +
-  
+  scale_fill_gradient2(low = "#2C3E50", mid = "#F7F7F7", high = "#7F0000", midpoint = 0, limits = c(-1, 1)) +
   theme_bw() + 
   labs(x = "", y = "", title = "") +
   theme(
     strip.background = element_rect(fill = "gray95"),
     strip.text = element_text(face = "bold"), 
     panel.grid = element_blank(),
-    axis.text.y = element_text(face = "bold", size = 10) # Metrikler daha okunaklı
+    axis.text.y = element_text(face = "bold", size = 10),
+    legend.position = "none"
   )
 
 print(heatmap_plot)
 
-
-
 ###############################################
-# TABLO
+# 6. TABLO ÇIKTISI
 ###############################################
-pacman::p_load(tidyr, dplyr, flextable, officer)
-
-# 1. Veriyi Hazırlama 
-perf_wide <- perf_df %>%
-  pivot_wider(
-    names_from = Model, 
-    values_from = c(Coverage, Avg_Width),
-    names_glue = "{.value}_{Model}"
-  )
-
-# 2. Genel Ortalama Hesaplama
-summary_wide <- perf_wide %>%
-  summarise(
-    Dataset = "GENEL ORTALAMA",
-    across(where(is.numeric), \(x) mean(x, na.rm = TRUE))
-  )
-
-final_df <- rbind(perf_wide, summary_wide)
-
-# 3. Flextable Yapılandırması
-apa_table <- flextable(final_df) %>%
+final_table <- flextable(final_table_df) %>%
   set_header_labels(
     Dataset = "Veriseti",
-    Coverage_LM = "LM", Coverage_RF = "RF", Coverage_XGBOOST = "XGBOOST",
-    Avg_Width_LM = "LM", Avg_Width_RF = "RF", Avg_Width_XGBOOST = "XGBOOST"
+    R2_Accuracy_LM = "LM", R2_Accuracy_RF = "RF", R2_Accuracy_XGBOOST = "XGB",
+    Coverage_LM = "LM", Coverage_RF = "RF", Coverage_XGBOOST = "XGB",
+    Avg_Width_LM = "LM", Avg_Width_RF = "RF", Avg_Width_XGBOOST = "XGB"
   ) %>%
   add_header_row(
-    values = c("", "Kapsama (Coverage)", "Ortalama Genişlik (Width)"),
-    colwidths = c(1, 3, 3)
+    values = c("", "R-Kare (Accuracy)", "Kapsama (Coverage)", "Norm. Genişlik (Log+MinMax)"),
+    colwidths = c(1, 3, 3, 3)
   ) %>%
-  
-
-  border_remove() %>% 
-  hline_top(part = "header", border = fp_border(width = 2)) %>% 
-  hline_bottom(part = "header", border = fp_border(width = 1)) %>% 
-  hline_bottom(part = "body", border = fp_border(width = 2)) %>% 
-
-  
+  border_remove() %>%
+  hline_top(part = "header", border = fp_border(width = 2)) %>%
+  hline_bottom(part = "header", border = fp_border(width = 1)) %>%
+  hline_bottom(part = "body", border = fp_border(width = 2)) %>%
   colformat_double(digits = 3) %>%
-  bold(i = nrow(final_df)) %>% 
-  bold(part = "header") %>%  
+  bold(i = nrow(final_table_df)) %>% 
+  bold(part = "header") %>%
   align(align = "center", part = "all") %>%
   align(j = 1, align = "left", part = "all") %>%
-  autofit() %>%
-  set_caption("")
+  autofit()
 
-
-apa_table
+print(final_table)
