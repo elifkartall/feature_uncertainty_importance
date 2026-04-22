@@ -221,30 +221,3 @@ heatmap_plot <- ggplot(plot_df, aes(x = Model, y = Metric, fill = Value)) +
   )
 
 print(heatmap_plot)
-
-###############################################
-# 6. TABLO ÇIKTISI
-###############################################
-final_table <- flextable(final_table_df) %>%
-  set_header_labels(
-    Dataset = "Veriseti",
-    R2_Accuracy_LM = "LM", R2_Accuracy_RF = "RF", R2_Accuracy_XGBOOST = "XGB",
-    Coverage_LM = "LM", Coverage_RF = "RF", Coverage_XGBOOST = "XGB",
-    Avg_Width_LM = "LM", Avg_Width_RF = "RF", Avg_Width_XGBOOST = "XGB"
-  ) %>%
-  add_header_row(
-    values = c("", "R-Kare (Accuracy)", "Kapsama (Coverage)", "Norm. Genişlik (Log+MinMax)"),
-    colwidths = c(1, 3, 3, 3)
-  ) %>%
-  border_remove() %>%
-  hline_top(part = "header", border = fp_border(width = 2)) %>%
-  hline_bottom(part = "header", border = fp_border(width = 1)) %>%
-  hline_bottom(part = "body", border = fp_border(width = 2)) %>%
-  colformat_double(digits = 3) %>%
-  bold(i = nrow(final_table_df)) %>% 
-  bold(part = "header") %>%
-  align(align = "center", part = "all") %>%
-  align(j = 1, align = "left", part = "all") %>%
-  autofit()
-
-print(final_table)
