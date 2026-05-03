@@ -165,7 +165,7 @@ norm_df <- final_df %>%
   )
 
 ###############################################
-# 6. TABLO
+# 6. MAKALEYE HAZIR APA TABLO
 ###############################################
 
 complexity_table <- flextable(norm_df) %>%
@@ -197,12 +197,18 @@ complexity_table <- flextable(norm_df) %>%
   
   bold(part = "header") %>%
   
+  # HİZALAMA: Önce her şeyi ortalıyoruz
   align(align = "center", part = "all") %>%
+  
+  # HİZALAMA: Sadece "Veri Seti" sütununu (1. sütun) sola yaslıyoruz
+  align(j = 1, align = "left", part = "all") %>%
   
   valign(valign = "center", part = "all") %>%
   
   add_footer_lines(" ")
 
-
+###############################################
+# 7. TABLOYU GÖSTER
+###############################################
 
 print(complexity_table)
