@@ -1,8 +1,51 @@
 # tahmin ve belirsizlik için önemli değişkenlerin benzerlik ve karmaşıklık arasındaki korelasyon analizi
 
 ###############################################
-# 1. VERİ HAZIRLIĞI
+# 1. VERİ BİRLEŞTİRME VE KORELASYON HESABI
 ###############################################
+
+complexity_data <- norm_df %>% 
+  rename(Dataset = `Veri Seti`) %>%
+  select(-`Eksik Veri Oranı`)
+
+# İki tabloyu Dataset üzerinden birleştir
+combined_data <- inner_join(alignment_df, complexity_data, by = "Dataset")
+
+
+# Eksik veri bulunmadığı için listeden çıkarıldı
+complexity_metrics <- c("Örnek Sayısı", "Özellik Sayısı", "Örnek / Özellik Oranı", 
+                        "Hedef Varyansı", "Tekrarlılık", 
+                        "İçsel Boyut", "Yerel Varyans")
+
+similarity_metrics <- c("Spearman", "Kendall", "Overlap")
+
+final_analysis_list <- list()
+
+for(m in unique(combined_data$Model)) {
+  model_sub <- combined_data %>% filter(Model == m)
+  
+  for(s_met in similarity_metrics) {
+    for(c_met in complexity_metrics) {
+      
+
+      cor_val <- cor(model_sub[[s_met]], model_sub[[c_met]], method = "spearman", use = "complete.obs")
+      
+      final_analysis_list[[length(final_analysis_list) + 1]] <- data.frame(
+        Model = m,
+        Similarity_Metric = s_met,
+        Complexity_Metric = c_met,
+        Correlation = cor_val
+      )
+    }
+  }
+}
+
+final_analysis <- bind_rows(final_analysis_list)
+
+###############################################
+# 2. VERİ DÜZENLEME VE FORMATLAMA
+###############################################
+
 final_analysis <- final_analysis %>%
   mutate(Similarity_Metric = case_when(
     Similarity_Metric == "Overlap" ~ "İlk 5 Örtüşme",
@@ -12,17 +55,17 @@ final_analysis <- final_analysis %>%
                                     levels = c("Kendall", "Spearman", "İlk 5 Örtüşme")))
 
 ###############################################
-# 2. GÖRSELLEŞTİRME
+# 3. GÖRSELLEŞTİRME (ISI HARİTASI)
 ###############################################
 
 correlation_plot <- ggplot(final_analysis, aes(x = Complexity_Metric, y = Similarity_Metric, fill = Correlation)) +
   
   geom_tile(color = "white", linewidth = 0.5) +
-
-  geom_text(aes(label = sprintf("%.2f", Correlation)), fontface = "bold", size = 3.5) +
- 
+  
+  geom_text(aes(label = sprintf("%.2f", Correlation)), fontface = "bold", size = 5) +
+  
   facet_wrap(~Model, ncol = 1) +
- 
+  
   scale_fill_gradient2(
     low = "#2C3E50", 
     mid = "#F7F7F7", 
@@ -31,23 +74,27 @@ correlation_plot <- ggplot(final_analysis, aes(x = Complexity_Metric, y = Simila
     limits = c(-1, 1)
   ) +
   
-  scale_x_discrete(labels = function(x) stringr::str_wrap(x, width = 10)) + 
 
-  theme_bw() + 
-  labs(x = "", y = "", title = "") +
-  theme(
+  scale_x_discrete(labels = function(x) stringr::str_wrap(x, width = 10)) + 
   
+  theme_bw() + 
+  labs(
+    x = "", 
+    y = "", 
+    title = ""
+  ) +
+  theme(
     strip.background = element_rect(fill = "gray95"),
-    strip.text = element_text(face = "bold"),
+    strip.text = element_text(face = "bold", size = 18),
     
-   
     panel.grid = element_blank(),
     
-    axis.text.x = element_text(face = "bold", size = 9, angle = 0),
-    axis.text.y = element_text(face = "bold", size = 10),
+    axis.text.x = element_text(face = "bold", size = 18, angle = 0),
+    axis.text.y = element_text(face = "bold", size = 18),
     
-
+    plot.title = element_text(face = "bold", size = 18, hjust = 0.5),
     legend.position = "none"
   )
+
 
 print(correlation_plot)
