@@ -17,7 +17,7 @@ get_cqr_templates <- function(model_type) {
     m_lo = make_model(
       train_fun = function(x, y) {
         if(model_type %in% c("rf", "xgboost")) {
-          quantregForest::quantregForest(as.data.frame(x), y, ntree = 200)
+          quantregForest::quantregForest(as.data.frame(x), y, ntree = 500)
         } else {
           df <- as.data.frame(x); df$y <- y
           quantreg::rq(y ~ ., data = df, tau = 0.05)
@@ -32,7 +32,7 @@ get_cqr_templates <- function(model_type) {
     m_hi = make_model(
       train_fun = function(x, y) {
         if(model_type %in% c("rf", "xgboost")) {
-          quantregForest::quantregForest(as.data.frame(x), y, ntree = 200)
+          quantregForest::quantregForest(as.data.frame(x), y, ntree = 500)
         } else {
           df <- as.data.frame(x); df$y <- y
           quantreg::rq(y ~ ., data = df, tau = 0.95)
