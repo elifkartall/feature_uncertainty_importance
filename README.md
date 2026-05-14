@@ -43,7 +43,7 @@ feature-uncertainty-importance/
 
 ## 1. Prediction vs Uncertainty Relationship Across Models
 
-<img width="856" height="499" alt="model_veri_metrik" src="https://github.com/user-attachments/assets/4f07245d-4df1-41e2-a57f-a74596cb2935" />
+<img width="1440" height="736" alt="Gemini_Generated_Image_e4cn9ze4cn9ze4cn" src="https://github.com/user-attachments/assets/260d992c-b8f9-4d33-97f0-81433f05e5c9" />
 
 The results demonstrate the extent to which variables important for predictive performance overlap with variables important for uncertainty estimation.
 
@@ -57,7 +57,8 @@ These findings suggest that, especially in complex models, prediction and uncert
 
 ## 2. Relationship Between Data Complexity and Explanations
 
-<img width="856" height="499" alt="karmaşıklık_korelasyon" src="https://github.com/user-attachments/assets/c7d7dfc9-7016-48b3-a5d9-c9e49b84b52d" />
+<img width="1345" height="784" alt="Gemini_Generated_Image_26om0i26om0i26om" src="https://github.com/user-attachments/assets/cd11c779-d9ab-4f65-84a5-fa9150f06cd2" />
+
 
 This heatmap illustrates the relationship between data complexity measures and the alignment of prediction and uncertainty feature importance structures.
 
