@@ -1,6 +1,5 @@
 # Explaining Feature Contributions to Predictive Performance and Predictive Uncertainty
 
-> **Abstract:**  
 > Although machine learning models can achieve high predictive accuracy, the factors influencing why a model makes a prediction and how reliable that prediction is may not always depend on the same variables. This study investigates the extent to which feature importance structures explaining predictive performance overlap with those explaining model uncertainty.
 >
 > Within the scope of the study, Linear Regression, Random Forest, and XGBoost models were evaluated on 9 regression datasets with different structural characteristics. Conformalized Quantile Regression was used for uncertainty modeling, and Permutation Feature Importance analyses were conducted for both predictive performance and prediction interval width.
