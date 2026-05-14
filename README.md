@@ -1,15 +1,15 @@
 # Explaining Feature Contributions to Predictive Performance and Predictive Uncertainty
 
-> **Özet:**  
-> Makine öğrenmesi modelleri yüksek doğruluk sağlayabilse de, modelin neden bu tahmini yaptığı ve ne kadar güvenilir olduğu her zaman aynı değişkenlerden etkilenmeyebilir. Bu çalışmada, tahmin performansını açıklayan feature importance yapıları ile model belirsizliğini açıklayan feature importance yapılarının ne ölçüde örtüştüğü incelenmiştir.
+> **Abstract:**  
+> Although machine learning models can achieve high predictive accuracy, the factors influencing why a model makes a prediction and how reliable that prediction is may not always depend on the same variables. This study investigates the extent to which feature importance structures explaining predictive performance overlap with those explaining model uncertainty.
 >
-> Çalışma kapsamında Linear Regression, Random Forest ve XGBoost modelleri; farklı yapısal özelliklere sahip 9 regresyon veri seti üzerinde değerlendirilmiştir. Belirsizlik modellemesi için Conformalized Quantile Regression yaklaşımı kullanılmış, hem tahmin performansı hem de prediction interval width üzerinden Permutation Feature Importance analizleri gerçekleştirilmiştir.
+> Within the scope of the study, Linear Regression, Random Forest, and XGBoost models were evaluated on 9 regression datasets with different structural characteristics. Conformalized Quantile Regression was used for uncertainty modeling, and Permutation Feature Importance analyses were conducted for both predictive performance and prediction interval width.
 >
-> Elde edilen feature importance sıralamaları Spearman, Kendall ve Top-5 overlap metrikleri üzerinden karşılaştırılmıştır. Bulgular, özellikle karmaşık modellerde tahmin ve belirsizlik açıklamaları yapılarının farklı değişken örüntülerine dayanabildiğini göstermektedir.
+> The obtained feature importance rankings were compared using Spearman, Kendall, and Top-5 overlap metrics. The findings indicate that, especially in complex models, prediction and uncertainty explanation structures may rely on different feature patterns.
 
 ---
 
-# Kullanılan Teknolojiler
+# Technologies Used
 
 <p align="left">
   <img src="https://img.shields.io/badge/R_Language-276DC3?style=for-the-badge&logo=r&logoColor=white" />
@@ -23,69 +23,63 @@
 </p>
 
 ---
-# Proje Yapısı
+
+# Project Structure
 
 ```bash
 feature-uncertainty-importance/
 │
-├── data/                                 # Kullanılan veri setlerinün yüklenmesi aşaması scriptte yer almaktadır.
+├── data/                                 # Dataset loading process is included within the scripts.
 │
 ├── scripts/
-│   ├── feature_comp.R                    # Tahmin ve belirsizlik değişken önemleri karşılaştırmaları
-│   ├── coverage_average_width.R          # Coverage ve interval width analizleri
-│   ├── data_complexity.R                 # Veri karmaşıklığı metrikleri
+│   ├── feature_comp.R                    # Prediction vs uncertainty feature importance comparisons
+│   ├── coverage_average_width.R          # Coverage and interval width analyses
+│   ├── data_complexity.R                 # Data complexity metrics
 │   └── korelasyon_analizi.R              
 │
 └── README.md
 ```
 
+# Findings
 
-# Bulgular
-
-## 1. Modeller Bazında Prediction vs Uncertainty İlişkisi
+## 1. Prediction vs Uncertainty Relationship Across Models
 
 <img width="856" height="499" alt="model_veri_metrik" src="https://github.com/user-attachments/assets/4f07245d-4df1-41e2-a57f-a74596cb2935" />
 
+The results demonstrate the extent to which variables important for predictive performance overlap with variables important for uncertainty estimation.
 
-Sonuçlar tahmin performansı için önemli olan değişkenler ile belirsizlik için önemli olan değişkenlerin ne ölçüde örtüştüğünü göstermektedir.
+- Linear Regression models generally exhibit high Spearman and Kendall correlations.
+- In Random Forest models, correlation values vary depending on the dataset.
+- In XGBoost models, negative correlations are observed in some datasets.
 
-- Linear Regression modellerinde Spearman ve Kendall korelasyonlarının çoğunlukla yüksek olduğu görülmektedir.
-- Random Forest modellerinde korelasyon değerleri veri setine göre değişkenlik göstermektedir.
-- XGBoost modellerinde ise bazı veri setlerinde negatif korelasyonlar gözlenmiştir.
-
-Bu bulgular, özellikle karmaşık modellerde prediction ve uncertainty explanations yapılarının farklı feature örüntülerine dayanabileceğini göstermektedir.
+These findings suggest that, especially in complex models, prediction and uncertainty explanation structures may rely on different feature patterns.
 
 ---
 
-## 2. Veri Karmaşıklığı ve Açıklama İlişkisi
+## 2. Relationship Between Data Complexity and Explanations
 
 <img width="856" height="499" alt="karmaşıklık_korelasyon" src="https://github.com/user-attachments/assets/c7d7dfc9-7016-48b3-a5d9-c9e49b84b52d" />
 
+This heatmap illustrates the relationship between data complexity measures and the alignment of prediction and uncertainty feature importance structures.
 
-Bu heatmap, veri karmaşıklığı ölçütleri ile tahmin ve belirsizlik önemleri ilişkisi arasındaki bağlantıyı göstermektedir.
+According to the results:
 
-Sonuçlara göre:
+- As the number of features increases, the agreement between prediction and uncertainty importance rankings decreases.
+- Correlation values tend to decrease at higher intrinsic dimensionality levels.
+- Particularly in XGBoost models, feature importance structures diverge more clearly as data complexity increases.
 
-- Feature sayısı arttıkça prediction ve uncertainty importance sıralamaları arasındaki uyum azalmaktadır.
-- Yüksek içsel boyut seviyelerinde korelasyonların düştüğü görülmektedir.
-- Özellikle XGBoost modellerinde veri karmaşıklığı arttıkça değişken önemleri yapıları belirgin şekilde ayrışmaktadır.
-
-Bu durum, karmaşık veri yapılarında modelin tahmin ve belirsizlik süreçlerini farklı bilgi alt uzayları üzerinden oluşturabileceğini göstermektedir.
-
----
-
-# Sonuç
-
-Bu çalışma, makine öğrenmesi modellerinde tahmin performansı ile  belirsizlik açıklamaları yapılarının her zaman aynı değişkenlere dayanmadığını göstermektedir.
-
-Elde edilen sonuçlar, yalnızca model doğruluğunun değil, model belirsizliğinin de açıklanmasının gerekli olduğunu ortaya koymaktadır. Bu yaklaşım özellikle yüksek riskli karar destek sistemlerinde daha güvenilir ve şeffaf yapay zeka uygulamaları geliştirilmesine katkı sağlayabilir.
+These findings indicate that, within complex data structures, models may construct prediction and uncertainty mechanisms using different information subspaces.
 
 ---
 
+# Conclusion
+
+This study demonstrates that predictive performance explanations and uncertainty explanation structures in machine learning models do not always rely on the same variables.
+
+The findings highlight that not only model accuracy but also model uncertainty should be interpreted and explained. This approach may contribute to developing more reliable and transparent artificial intelligence systems, particularly in high-risk decision-support applications.
 
 ---
 
-# İletişim
+# Contact
 **Elif Kartal**  
 📧 ds.elifkartal@gmail.com
-
